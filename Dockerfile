@@ -2,7 +2,7 @@ FROM python:3.12.1-slim as base
 
 ENV PYTHONUNBUFFERED=1
 
-# Build stage - build server as wheel
+# Build stage
 FROM base as builder
 
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1 \
@@ -14,33 +14,36 @@ RUN apt-get update && apt-get install -y \
     gcc \
     git \
     libpq-dev \
-    openssh-client \
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip install "poetry==$POETRY_VERSION"
 RUN python -m venv /venv
 
-COPY /app /app
-COPY pyproject.toml /
-COPY poetry.lock /
+WORKDIR /app
 
-RUN --mount=type=ssh poetry build && /venv/bin/pip install dist/*.whl
+COPY pyproject.toml poetry.lock migrate.py alembic.ini tripsocail.json /app/
+COPY /alembic /app/alembic
+COPY app /app/app
 
-# Run stage - copy venv and run
+RUN . /venv/bin/activate && poetry install --no-dev
+
+# Final stage
 FROM base as final
 
 COPY --from=builder /venv /venv
 ENV PATH="/venv/bin:$PATH"
-RUN apt-get update && apt-get install -y libpq-dev \
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY /alembic /alembic
-COPY alembic.ini /
-COPY migrate.py /
+COPY --from=builder /app /app
 
-CMD exec gunicorn \
-    --bind :$PORT \
-    --workers 3 \
-    -k uvicorn.workers.UvicornWorker \
-    --access-logfile - \
-    app.main:app
+RUN groupadd -r appuser && useradd --no-log-init -r -g appuser appuser
+USER appuser
+
+WORKDIR /app
+
+ENV PORT=8000
+
+CMD ["gunicorn", "--bind", ":8000", "--workers", "3", "-k", "uvicorn.workers.UvicornWorker", "app.main:app"]

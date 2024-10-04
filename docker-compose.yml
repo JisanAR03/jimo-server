@@ -1,0 +1,17 @@
+version: '3.9'
+
+services:
+  app:
+    build: .
+    container_name: jimo-server
+    ports:
+      - "80:8000"
+    environment:
+      DATABASE_URL: postgresql+psycopg://username:password@server.com:6543/postgres
+      GOOGLE_APPLICATION_CREDENTIALS: tripsocail.json
+      ENABLE_DOCS: 1
+    networks:
+      - app-network
+
+networks:
+  app-network:

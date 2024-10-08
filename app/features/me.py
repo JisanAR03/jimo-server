@@ -29,7 +29,7 @@ from app.features.stores import (
     get_feed_store,
 )
 from app.features.tasks import notify_many_followed
-from app.features.users.dependencies import get_caller_user
+from app.features.users.dependencies import get_caller_user, get_cloudflare_storage
 from app.features.users.entities import PublicUser, UserPrefs, SuggestedUserIdItem, InternalUser
 from app.features.users.types import (
     UpdateProfileResponse,
@@ -40,6 +40,8 @@ from app.features.users.types import (
     PhoneNumberList,
 )
 from app.features.users.user_store import UserStore
+
+from app.core.cloudflare_storage import CloudflareR2Storage
 
 router = APIRouter(tags=["me"])
 
@@ -114,16 +116,16 @@ async def update_preferences(
 @router.post("/photo", response_model=PublicUser)
 async def upload_profile_picture(
     file: UploadFile = File(...),
-    firebase_user: FirebaseUser = Depends(get_firebase_user),
+    cloudflare_storage: CloudflareR2Storage = Depends(get_cloudflare_storage),
     db: AsyncSession = Depends(get_db),
     user_store: UserStore = Depends(get_user_store),
     user: InternalUser = Depends(get_caller_user),
 ):
     """Set the current user's profile picture."""
-    image_upload = await image_utils.upload_image(file, user, firebase_user.shared_firebase, db)
+    image_upload = await image_utils.upload_image(file, user, cloudflare_storage, db)
     new_user, errors = await user_store.update_user(user.id, profile_picture_id=image_upload.id)
     if user.profile_picture_blob_name:
-        await firebase_user.shared_firebase.delete_image(user.profile_picture_blob_name)
+        await cloudflare_storage.delete_image(user.profile_picture_blob_name)
     if new_user is not None:
         return new_user
     else:

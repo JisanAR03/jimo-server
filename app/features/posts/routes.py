@@ -5,7 +5,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app import tasks
 from app.core.database.engine import get_db
-from app.core.firebase import FirebaseUser, get_firebase_user
 from app.core.types import SimpleResponse, PostId, CursorId
 from app.features.comments.comment_store import CommentStore
 from app.features.comments.entities import CommentWithoutLikeStatus
@@ -29,11 +28,13 @@ from app.features.stores import (
     get_place_store,
     get_comment_store,
 )
-from app.features.users.dependencies import get_caller_user
+from app.features.users.dependencies import get_caller_user, get_cloudflare_storage
 from app.features.users.entities import InternalUser
 from app.features.users.relation_store import RelationStore
 from app.features.users.user_store import UserStore
 from app.utils import get_logger
+
+from app.core.cloudflare_storage import CloudflareR2Storage
 
 router = APIRouter(tags=["posts"])
 log = get_logger(__name__)
@@ -117,7 +118,7 @@ async def update_post(
     post_id: PostId,
     req: CreatePostRequest,
     background_tasks: BackgroundTasks,
-    firebase_user: FirebaseUser = Depends(get_firebase_user),
+    cloudflare_storage: CloudflareR2Storage = Depends(get_cloudflare_storage),
     place_store: PlaceStore = Depends(get_place_store),
     post_store: PostStore = Depends(get_post_store),
     user: InternalUser = Depends(get_caller_user),
@@ -148,7 +149,7 @@ async def update_post(
             to_delete = [media.blob_name for media in old_post.media if media not in updated_post.media]
             # Delete old image
             for blob_name in to_delete:
-                await firebase_user.shared_firebase.delete_image(blob_name)
+                await cloudflare_storage.delete_image(blob_name)
         if old_post.stars != updated_post.stars:
             # Slack stars updated
             background_tasks.add_task(tasks.slack_post_stars_changed, user.username, updated_post, old_post.stars)
@@ -165,7 +166,7 @@ async def update_post(
 @router.delete("/{post_id}", response_model=DeletePostResponse)
 async def delete_post(
     post_id: PostId,
-    firebase_user: FirebaseUser = Depends(get_firebase_user),
+    cloudflare_storage: CloudflareR2Storage = Depends(get_cloudflare_storage),
     post_store: PostStore = Depends(get_post_store),
     user: InternalUser = Depends(get_caller_user),
 ):
@@ -174,7 +175,7 @@ async def delete_post(
     if post is not None and post.user_id == user.id:
         await post_store.delete_post(post.id)
         for image in post.media:
-            await firebase_user.shared_firebase.delete_image(image.blob_name)
+            await cloudflare_storage.delete_image(image.blob_name)
         return DeletePostResponse(deleted=True)
     return DeletePostResponse(deleted=False)
 

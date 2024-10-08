@@ -25,10 +25,13 @@ from app.features.places.routes import router as place_router
 from app.features.posts.routes import router as post_router
 from app.features.search.routes import router as search_router
 from app.features.onboarding.routes import router as onboarding_router
-from app.features.users.dependencies import get_authorization_header, get_caller_user
+from app.features.users.dependencies import get_authorization_header, get_caller_user, get_cloudflare_storage
 from app.features.users.entities import InternalUser
 from app.features.users.routes import router as user_router
 from app.utils import get_logger
+
+from app.core.cloudflare_storage import CloudflareR2Storage
+
 
 
 log = get_logger(__name__)
@@ -87,12 +90,12 @@ async def index():
 @app.post("/images", response_model=ImageUploadResponse)
 async def upload_image(
     file: UploadFile = File(...),
-    firebase_user: FirebaseUser = Depends(get_firebase_user),
+    cloudflare_storage: CloudflareR2Storage = Depends(get_cloudflare_storage),
     db: AsyncSession = Depends(get_db),
     user: InternalUser = Depends(get_caller_user),
 ):
     """Upload the given image to Firebase if allowed, returning the image id (used for posts + profile pictures)."""
-    image_upload = await image_utils.upload_image(file, user, firebase_user.shared_firebase, db)
+    image_upload = await image_utils.upload_image(file, user, cloudflare_storage, db)
     return ImageUploadResponse(image_id=image_upload.id)
 
 

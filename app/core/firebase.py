@@ -6,7 +6,8 @@ from typing import Optional, IO, Tuple, Protocol
 
 import firebase_admin  # type: ignore
 from fastapi import Header, HTTPException
-from firebase_admin import auth, storage
+from firebase_admin import auth
+# from firebase_admin import auth, storage
 from firebase_admin.auth import (  # type: ignore
     InvalidIdTokenError,
     ExpiredIdTokenError,
@@ -15,8 +16,8 @@ from firebase_admin.auth import (  # type: ignore
     UserNotFoundError,
 )
 from firebase_admin.exceptions import FirebaseError  # type: ignore
-from google.cloud.exceptions import GoogleCloudError
-from google.cloud.storage import Bucket  # type: ignore
+# from google.cloud.exceptions import GoogleCloudError
+# from google.cloud.storage import Bucket  # type: ignore
 
 from app.core import config
 from app.utils import get_logger
@@ -37,20 +38,20 @@ class FirebaseAdminProtocol(Protocol):
     async def get_uid_from_auth_header(self, authorization: Optional[str]) -> Optional[str]:
         ...
 
-    async def upload_image(self, user_uid: str, image_id: uuid.UUID, file_obj: IO) -> Optional[Tuple[str, str]]:
-        ...
+    # async def upload_image(self, user_uid: str, image_id: uuid.UUID, file_obj: IO) -> Optional[Tuple[str, str]]:
+    #     ...
 
-    async def make_image_private(self, blob_name: str):
-        ...
+    # async def make_image_private(self, blob_name: str):
+    #     ...
 
-    async def make_image_public(self, blob_name: str):
-        ...
+    # async def make_image_public(self, blob_name: str):
+    #     ...
 
-    async def delete_image(self, blob_name: str):
-        ...
+    # async def delete_image(self, blob_name: str):
+    #     ...
 
-    async def delete_user_images(self, user_uid: str):
-        ...
+    # async def delete_user_images(self, user_uid: str):
+    #     ...
 
 
 class FirebaseAdmin(FirebaseAdminProtocol):
@@ -99,60 +100,60 @@ class FirebaseAdmin(FirebaseAdminProtocol):
         return await self.get_uid_from_token(id_token)
 
     # Storage
-    async def upload_image(self, user_uid: str, image_id: uuid.UUID, file_obj: IO) -> tuple[str, str] | None:
-        """Upload the given image to Firebase, returning the blob name and public URL if uploading was successful."""
-        loop = get_event_loop()
-        bucket = storage.bucket(app=self._app)
-        blob = bucket.blob(f"images/{user_uid}/{image_id}.jpg")
-        # Known issue in firebase, this metadata is necessary to view images via Firebase console
-        blob.metadata = {"firebaseStorageDownloadTokens": uuid.uuid4()}
-        try:
-            await loop.run_in_executor(
-                None,
-                functools.partial(blob.upload_from_file, file_obj, content_type="image/jpeg"),
-            )
-        except GoogleCloudError:
-            log.exception("Failed to upload image")
-            return None
-        await loop.run_in_executor(None, blob.make_public)
-        return blob.name, blob.public_url  # type: ignore
+    # async def upload_image(self, user_uid: str, image_id: uuid.UUID, file_obj: IO) -> tuple[str, str] | None:
+    #     """Upload the given image to Firebase, returning the blob name and public URL if uploading was successful."""
+    #     loop = get_event_loop()
+    #     bucket = storage.bucket(app=self._app)
+    #     blob = bucket.blob(f"images/{user_uid}/{image_id}.jpg")
+    #     # Known issue in firebase, this metadata is necessary to view images via Firebase console
+    #     blob.metadata = {"firebaseStorageDownloadTokens": uuid.uuid4()}
+    #     try:
+    #         await loop.run_in_executor(
+    #             None,
+    #             functools.partial(blob.upload_from_file, file_obj, content_type="image/jpeg"),
+    #         )
+    #     except GoogleCloudError:
+    #         log.exception("Failed to upload image")
+    #         return None
+    #     await loop.run_in_executor(None, blob.make_public)
+    #     return blob.name, blob.public_url  # type: ignore
 
-    async def make_image_private(self, blob_name: str):
-        """Revoke read access for anonymous users. Used when deleting posts."""
-        loop = get_event_loop()
-        bucket = storage.bucket(app=self._app)
-        blob = await loop.run_in_executor(None, bucket.get_blob, blob_name)
-        if blob:
-            await loop.run_in_executor(None, blob.make_private)
+    # async def make_image_private(self, blob_name: str):
+    #     """Revoke read access for anonymous users. Used when deleting posts."""
+    #     loop = get_event_loop()
+    #     bucket = storage.bucket(app=self._app)
+    #     blob = await loop.run_in_executor(None, bucket.get_blob, blob_name)
+    #     if blob:
+    #         await loop.run_in_executor(None, blob.make_private)
 
-    async def make_image_public(self, blob_name: str):
-        """Make the image public. Used when restoring deleted posts."""
-        loop = get_event_loop()
-        bucket = await loop.run_in_executor(None, functools.partial(storage.bucket, app=self._app))
-        blob = await loop.run_in_executor(None, bucket.get_blob, blob_name)
-        if blob:
-            await loop.run_in_executor(None, blob.make_public)
+    # async def make_image_public(self, blob_name: str):
+    #     """Make the image public. Used when restoring deleted posts."""
+    #     loop = get_event_loop()
+    #     bucket = await loop.run_in_executor(None, functools.partial(storage.bucket, app=self._app))
+    #     blob = await loop.run_in_executor(None, bucket.get_blob, blob_name)
+    #     if blob:
+    #         await loop.run_in_executor(None, blob.make_public)
 
-    async def delete_image(self, blob_name: str):
-        """Delete the given image."""
-        loop = get_event_loop()
-        bucket = await loop.run_in_executor(None, functools.partial(storage.bucket, app=self._app))
-        blob = await loop.run_in_executor(None, bucket.get_blob, blob_name)
-        if blob:
-            await loop.run_in_executor(None, blob.delete)
+    # async def delete_image(self, blob_name: str):
+    #     """Delete the given image."""
+    #     loop = get_event_loop()
+    #     bucket = await loop.run_in_executor(None, functools.partial(storage.bucket, app=self._app))
+    #     blob = await loop.run_in_executor(None, bucket.get_blob, blob_name)
+    #     if blob:
+    #         await loop.run_in_executor(None, blob.delete)
 
-    async def delete_user_images(self, user_uid: str):
-        """Delete the given user's images."""
-        loop = get_event_loop()
-        bucket = await self._get_bucket(loop)
-        image_folder = f"images/{user_uid}"
-        get_images_function_sync = functools.partial(bucket.list_blobs, prefix=image_folder)
-        blobs = await loop.run_in_executor(None, get_images_function_sync)
-        for blob in blobs:
-            await loop.run_in_executor(None, blob.delete)
+    # async def delete_user_images(self, user_uid: str):
+    #     """Delete the given user's images."""
+    #     loop = get_event_loop()
+    #     bucket = await self._get_bucket(loop)
+    #     image_folder = f"images/{user_uid}"
+    #     get_images_function_sync = functools.partial(bucket.list_blobs, prefix=image_folder)
+    #     blobs = await loop.run_in_executor(None, get_images_function_sync)
+    #     for blob in blobs:
+    #         await loop.run_in_executor(None, blob.delete)
 
-    async def _get_bucket(self, loop) -> Bucket:
-        return await loop.run_in_executor(None, functools.partial(storage.bucket, app=self._app))
+    # async def _get_bucket(self, loop) -> Bucket:
+    #     return await loop.run_in_executor(None, functools.partial(storage.bucket, app=self._app))
 
 
 @dataclass

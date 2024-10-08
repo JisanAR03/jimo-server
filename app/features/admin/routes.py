@@ -33,6 +33,10 @@ from app.features.stores import get_user_store
 from app.features.users.entities import InternalUser
 from app.features.users.user_store import UserStore
 
+
+from app.features.users.dependencies import get_cloudflare_storage
+from app.core.cloudflare_storage import CloudflareR2Storage
+
 router = APIRouter(tags=["admin"])
 
 Page = namedtuple("Page", ["offset", "limit"])
@@ -63,7 +67,7 @@ def get_page(page: int = Query(1, gt=0), limit: int = Query(100, gt=0, le=1000))
 async def delete_users_marked_for_deletion(
     _admin: InternalUser = Depends(get_admin_or_raise),
     db: AsyncSession = Depends(get_db),
-    firebase_user: FirebaseUser = Depends(get_firebase_user),
+    cloudflare_storage: CloudflareR2Storage = Depends(get_cloudflare_storage),
     user_store: UserStore = Depends(get_user_store),
 ):
     """Delete users marked for deletion."""
@@ -73,7 +77,7 @@ async def delete_users_marked_for_deletion(
     users_to_delete = result.all()
     for user_id, user_uid in users_to_delete:
         await user_store.hard_delete_user(user_id)
-        await firebase_user.shared_firebase.delete_user_images(user_uid=user_uid)
+        await cloudflare_storage.delete_user_images(user_uid=user_uid)
     return dict(success=True)
 
 
@@ -285,9 +289,9 @@ async def update_post(
     updated_post: PostRow = updated_post_result.scalars().first()  # type: ignore
     if updated_post is not None and updated_post.image is not None:
         if updated_post.deleted:
-            await firebase_user.shared_firebase.make_image_private(updated_post.image_blob_name)
+            await firebase_user.shared_firebase.delete_image(updated_post.image_blob_name)
         else:
-            await firebase_user.shared_firebase.make_image_public(updated_post.image_blob_name)
+            pass
     return updated_post
 
 

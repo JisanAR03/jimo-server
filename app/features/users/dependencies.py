@@ -1,6 +1,7 @@
 from typing import Optional
 
 from fastapi import Depends, HTTPException, Request
+from app.core.cloudflare_storage import CloudflareR2Storage
 
 from app.core.firebase import FirebaseUser, get_firebase_user
 from app.features.stores import get_user_store
@@ -24,3 +25,8 @@ async def get_caller_user(
     if user is None or user.deleted:
         raise HTTPException(403)
     return user
+
+_cloudflare_storage = CloudflareR2Storage()
+
+def get_cloudflare_storage():
+    return _cloudflare_storage

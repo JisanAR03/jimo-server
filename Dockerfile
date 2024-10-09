@@ -21,7 +21,7 @@ RUN python -m venv /venv
 
 WORKDIR /app
 
-COPY pyproject.toml poetry.lock migrate.py alembic.ini tripsocail.json /app/
+COPY pyproject.toml poetry.lock migrate.py alembic.ini seenspot.json /app/
 COPY /alembic /app/alembic
 COPY app /app/app
 
